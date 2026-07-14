@@ -15,6 +15,12 @@ set(CMAKE_MACOSX_RPATH ON)
 
 include(GNUInstallDirs)
 
+option(FOMA_BUILD_SHARED "Build shared libfoma" ON)
+
+if(EMSCRIPTEN)
+	set(FOMA_BUILD_SHARED OFF)
+endif()
+
 if(MSVC)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} /utf-8 /std:c17 /permissive- /W4 /MP")
 	set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} /O2")
@@ -134,13 +140,15 @@ add_library(foma-static STATIC ${SOURCES})
 target_link_libraries(foma-static PUBLIC ${ZLIB_LIBS})
 set_target_properties(foma-static PROPERTIES ARCHIVE_OUTPUT_NAME foma)
 
-add_library(foma-shared SHARED ${SOURCES})
-target_link_libraries(foma-shared PRIVATE ${ZLIB_LIBS})
-set_target_properties(foma-shared PROPERTIES
-	LIBRARY_OUTPUT_NAME foma RUNTIME_OUTPUT_NAME foma
-	VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
-if(NOT MSVC)
-	set_target_properties(foma-shared PROPERTIES ARCHIVE_OUTPUT_NAME foma)
+if(FOMA_BUILD_SHARED)
+	add_library(foma-shared SHARED ${SOURCES})
+	target_link_libraries(foma-shared PRIVATE ${ZLIB_LIBS})
+	set_target_properties(foma-shared PROPERTIES
+		LIBRARY_OUTPUT_NAME foma RUNTIME_OUTPUT_NAME foma
+		VERSION ${PROJECT_VERSION} SOVERSION ${PROJECT_VERSION_MAJOR})
+	if(NOT MSVC)
+		set_target_properties(foma-shared PROPERTIES ARCHIVE_OUTPUT_NAME foma)
+	endif()
 endif()
 
 # WASM-specific target
@@ -190,8 +198,13 @@ else()
 
 	configure_file(libfoma.pc.in libfoma.pc @ONLY)
 
+	set(FOMA_INSTALL_LIB_TARGETS foma-static)
+	if(FOMA_BUILD_SHARED)
+		list(APPEND FOMA_INSTALL_LIB_TARGETS foma-shared)
+	endif()
+
 	# Install
-	install(TARGETS foma-static foma-shared ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+	install(TARGETS ${FOMA_INSTALL_LIB_TARGETS} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 	install(FILES fomalib.h fomalibconf.h DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 	install(TARGETS foma-bin cgflookup RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libfoma.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig/")
