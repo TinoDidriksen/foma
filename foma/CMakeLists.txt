@@ -211,6 +211,6 @@ else()
 
 endif()
 
-if(WIN32)
-  target_link_libraries(flookup PRIVATE ws2_32)
+if(WIN32 AND TARGET flookup)
+	target_link_libraries(flookup PRIVATE ws2_32)
 endif()
