@@ -920,6 +920,9 @@ int net_print_att(struct fsm *net, FILE *outfile) {
     return(1);
 }
 
+/* Limit uncompressed file size to avoid excessive memory allocation. */
+#define MAX_UNCOMPRESSED_FILE_SIZE (256 * 1024 * 1024)
+
 static size_t io_get_gz_file_size(char *filename) {
 
     FILE    *infile;
@@ -928,9 +931,18 @@ static size_t io_get_gz_file_size(char *filename) {
     unsigned int ints[4], i;
 
     /* The last four bytes in a .gz file shows the size of the uncompressed data */
-    infile = fopen(filename, "r");
-    fseek(infile, -4, SEEK_END);
-    fread(&bytes, 1, 4, infile);
+    infile = fopen(filename, "rb");
+    if (infile == NULL) {
+        return 0;
+    }
+    if (fseek(infile, -4, SEEK_END) != 0) {
+        fclose(infile);
+        return 0;
+    }
+    if (fread(bytes, 1, 4, infile) != 4) {
+        fclose(infile);
+        return 0;
+    }
     fclose(infile);
     for (i = 0 ; i < 4 ; i++) {
         ints[i] = bytes[i];
@@ -942,20 +954,28 @@ static size_t io_get_gz_file_size(char *filename) {
 static size_t io_get_regular_file_size(char *filename) {
 
     FILE    *infile;
-    size_t    numbytes;
 
-    infile = fopen(filename, "r");
-    fseek(infile, 0L, SEEK_END);
-    numbytes = ftell(infile);
+    infile = fopen(filename, "rb");
+    if (infile == NULL) {
+        return 0;
+    }
+    if (fseek(infile, 0L, SEEK_END) != 0) {
+        fclose(infile);
+        return 0;
+    }
+    long result = ftell(infile);
     fclose(infile);
-    return(numbytes);
+    if (result < 0) {
+        return 0;
+    }
+    return (size_t) result;
 }
 
 
 static size_t io_get_file_size(char *filename) {
     gzFile FILE;
     size_t size;
-    FILE = gzopen(filename, "r");
+    FILE = gzopen(filename, "rb");
     if (FILE == NULL) {
         return(0);
     }
@@ -975,14 +995,28 @@ size_t io_gz_file_to_mem(struct io_buf_handle *iobh, char *filename) {
     gzFile FILE;
 
     size = io_get_file_size(filename);
-    if (size == 0) {
+    if (size == 0 || size > MAX_UNCOMPRESSED_FILE_SIZE) {
         return 0;
     }
-    (iobh->io_buf) = malloc((size+1)*sizeof(char));
+    iobh->io_buf = malloc(size + 1);
+    if (iobh->io_buf == NULL) {
+        return 0;
+    }
     FILE = gzopen(filename, "rb");
-    gzread(FILE, iobh->io_buf, size);
+    if (FILE == NULL) {
+        free(iobh->io_buf);
+        iobh->io_buf = NULL;
+        return 0;
+    }
+    int nread = gzread(FILE, iobh->io_buf, size);
+    if (nread < 0 || (size_t)nread != size) {
+        gzclose(FILE);
+        free(iobh->io_buf);
+        iobh->io_buf = NULL;
+        return 0;
+    }
     gzclose(FILE);
-    *((iobh->io_buf)+size) = '\0';
+    iobh->io_buf[size] = '\0';
     iobh->io_buf_ptr = iobh->io_buf;
     return(size);
 }
