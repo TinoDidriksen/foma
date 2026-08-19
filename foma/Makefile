@@ -205,4 +205,4 @@ distclean: clean
 	rm -f regex.c regex.h lex.yy.c lex.lexc.c lex.interface.c lex.cmatrix.c regex.output
 
 check: all
-	./tests/run.sh
+	cd tests && PATH="$(CURDIR):$$PATH" ./run.sh
