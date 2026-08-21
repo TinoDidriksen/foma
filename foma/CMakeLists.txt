@@ -211,5 +211,7 @@ else()
 	install(FILES "${CMAKE_CURRENT_BINARY_DIR}/libfoma.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig/")
 
 	enable_testing()
+	set(ENV{CTEST_OUTPUT_ON_FAILURE} 1)
+	set(CMAKE_CTEST_ARGUMENTS "-VV")
 	add_test(NAME t_run COMMAND ./run.sh "$<TARGET_FILE:foma-bin>" WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 endif()
